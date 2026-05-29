@@ -1,4 +1,3 @@
-import os
 import requests
 import zipfile
 import io
@@ -6,8 +5,19 @@ from pathlib import Path
 from .base import BaseDataset
 
 DATASETS = {
+    "Apache": "https://zenodo.org/record/8275861/files/Apache.zip?download=1",
     "HDFS": "https://zenodo.org/record/8275861/files/HDFS.zip?download=1",
     "BGL": "https://zenodo.org/record/8275861/files/BGL.zip?download=1",
+    "Hadoop": "https://zenodo.org/record/8275861/files/Hadoop.zip?download=1",
+    "HPC": "https://zenodo.org/record/8275861/files/HPC.zip?download=1",
+    "Linux": "https://zenodo.org/record/8275861/files/Linux.zip?download=1",
+    "Mac": "https://zenodo.org/record/8275861/files/Mac.zip?download=1",
+    "OpenSSH": "https://zenodo.org/record/8275861/files/OpenSSH.zip?download=1",
+    "OpenStack": "https://zenodo.org/record/8275861/files/OpenStack.zip?download=1",
+    "Proxifier": "https://zenodo.org/record/8275861/files/Proxifier.zip?download=1",
+    "Spark": "https://zenodo.org/record/8275861/files/Spark.zip?download=1",
+    "Thunderbird": "https://zenodo.org/record/8275861/files/Thunderbird.zip?download=1",
+    "Zookeeper": "https://zenodo.org/record/8275861/files/Zookeeper.zip?download=1",
 }
 
 class LoghubDataset(BaseDataset):
@@ -20,22 +30,26 @@ class LoghubDataset(BaseDataset):
         self.data_dir = Path(data_dir)
         self.dataset_dir = self.data_dir / name
 
-    def download(self, force: bool = False) -> None:
+    def download(self, force=False, debug=False) -> None:
         if self.dataset_dir.exists() and not force:
-            print(f"Dataset {self.name} already exists at {self.dataset_dir}")
+            if debug:
+                print(f"Dataset {self.name} already exists at {self.dataset_dir}")
             return
 
-        print(f"Downloading {self.name} dataset from {self.url}...")
+        if debug:
+            print(f"Downloading {self.name} dataset from {self.url}...")
         self.data_dir.mkdir(parents=True, exist_ok=True)
         
         response = requests.get(self.url, stream=True)
         response.raise_for_status()
-        
+
         with zipfile.ZipFile(io.BytesIO(response.content)) as z:
-            print(f"Extracting {self.name}...")
+            if debug:
+                print(f"Extracting {self.name}...")
             z.extractall(self.data_dir)
-        
-        print(f"{self.name} dataset ready.")
+
+        if debug:
+            print(f"{self.name} dataset ready.")
 
     def get_log_path(self) -> Path:
         log_file = self.dataset_dir / f"{self.name}.log"
