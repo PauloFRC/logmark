@@ -1,6 +1,7 @@
 import requests
 import zipfile
 import io
+from typing import Iterator
 from pathlib import Path
 from .base import BaseDataset
 
@@ -30,6 +31,10 @@ class LoghubDataset(BaseDataset):
         self.data_dir = Path(data_dir)
         self.dataset_dir = self.data_dir / name
 
+    @property
+    def is_streaming(self) -> bool:
+        return False
+
     def download(self, force=False, debug=False) -> None:
         if self.dataset_dir.exists() and not force:
             if debug:
@@ -50,6 +55,12 @@ class LoghubDataset(BaseDataset):
 
         if debug:
             print(f"{self.name} dataset ready.")
+
+    def get_log_iterator(self) -> Iterator[str]:
+        log_path = self.get_log_path()
+        with open(log_path, "r", encoding="utf-8", errors="ignore") as f:
+            for line in f:
+                yield line.strip()
 
     def get_log_path(self) -> Path:
         log_file = self.dataset_dir / f"{self.name}.log"

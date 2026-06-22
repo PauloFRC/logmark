@@ -1,17 +1,28 @@
 from abc import ABC, abstractmethod
+from typing import Any
+from typing import Iterable
 
 class BaseParser(ABC):
+    def __init__(self, **kwargs: Any):
+        self.config = kwargs
+        self.is_fitted = False
+
+    @property
+    @abstractmethod
+    def requires_fitting(self) -> bool:
+        """True for offline parsers, False for streaming parsers."""
+        pass
+
+    def fit(self, log_stream: Iterable[str]) -> None:
+        if self.requires_fitting:
+            self._fit_impl(log_stream)
+        self.is_fitted = True
+
+    @abstractmethod
+    def _fit_impl(self, log_stream: Iterable[str]) -> None:
+        pass
+
     @abstractmethod
     def parse_line(self, line: str) -> dict:
-        """Parse a single log line and return the parsed result."""
-        pass
-
-    @abstractmethod
-    def get_templates(self) -> list[str]:
-        """Return a list of all identified log templates."""
-        pass
-
-    @abstractmethod
-    def get_cluster_id(self, line: str) -> str:
-        """Parse a line and return its corresponding cluster/template ID."""
+        """Parses line into metadata and template details."""
         pass
