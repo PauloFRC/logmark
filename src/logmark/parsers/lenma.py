@@ -63,7 +63,6 @@ class LenMaParser(BaseParser):
         result_file = Path(self.outdir) / f"{log_name}_structured.csv"
         self.df_result = pd.read_csv(result_file)
         
-        # Build lookup table
         for _, row in self.df_result.iterrows():
             self._content_to_template[str(row["Content"])] = {
                 "cluster_id": str(row["EventId"]),

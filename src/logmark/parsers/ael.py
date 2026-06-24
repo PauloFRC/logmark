@@ -1,5 +1,6 @@
 import os
 from pathlib import Path
+import pandas as pd
 from typing import Any, Iterable
 from logparser.AEL import LogParser as AELImpl
 from .base import BaseParser
@@ -31,14 +32,12 @@ class AELParser(BaseParser):
     def parse_line(self, line: str) -> dict:
         if self.df_result is None:
             raise RuntimeError("AELParser must be fitted before calling parse_line.")
-        
-        # In a production grade framework, we'd use the log_format to extract <Content>
-        # and match against discovered templates. For now, we do a lookup in the fitted results.
-        # We assume the input 'line' matches the 'Content' column or the full line.
+
+        # TODO: Use log_format to extract <Content> and match templates
         if line in self._content_to_template:
             return self._content_to_template[line]
         
-        # Fallback: check if any content in df_result matches
+        # Check if any content in df_result matches
         row = self.df_result[self.df_result["Content"] == line]
         if not row.empty:
             result = {
@@ -65,11 +64,9 @@ class AELParser(BaseParser):
         )
             
         parser.parse(log_name)
-        import pandas as pd
         result_file = Path(self.outdir) / f"{log_name}_structured.csv"
         self.df_result = pd.read_csv(result_file)
         
-        # Build lookup table
         for _, row in self.df_result.iterrows():
             self._content_to_template[str(row["Content"])] = {
                 "cluster_id": str(row["EventId"]),
