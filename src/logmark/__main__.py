@@ -1,4 +1,4 @@
-import polars as pl
+import polars as plb
 from logmark.datasets import LoghubDataset
 from logmark.parsers import get_parser
 

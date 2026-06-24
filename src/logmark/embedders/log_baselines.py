@@ -60,15 +60,13 @@ class TransformerLogEncoder(LogEmbedder):
         super().__init__()
         if not HAS_TRANSFORMERS:
             raise ImportError(
-                "The 'transformers' library is required to use TransformerLogEncoder. "
-                "Install it with: pip install transformers"
+                "The 'transformers' library is required to use TransformerLogEncoder"
             )
 
         self.model_name = model_name
         self.config = AutoConfig.from_pretrained(model_name)
         self.transformer = AutoModel.from_pretrained(model_name)
 
-        # Freeze transformer weights for performance if only used as an extractor
         if not fine_tune:
             for param in self.transformer.parameters():
                 param.requires_grad = False
