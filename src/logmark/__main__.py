@@ -112,7 +112,7 @@ def run_pipeline(dataset_name: str = "Apache", num_lines: int = 1000):
 
 
 if __name__ == "__main__":
-    # You can change the dataset here
+    # Select dataset here
     dataset_to_run = "Apache"
     
     if len(sys.argv) > 1:
