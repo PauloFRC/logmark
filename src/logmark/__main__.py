@@ -1,47 +1,67 @@
-import polars as plb
+import sys
+import polars as pl
 from logmark.datasets import LoghubDataset
 from logmark.parsers import get_parser
-
 from logmark.windowing import LogWindowing, WindowType
-from logmark.embedders import build_encoder
 from logmark.collators.WindowCollator import WindowCollator
+from logmark.embedders import build_encoder
 
-def main():
-    print("=== Pipeline Demo ===")
 
-    dataset_name = "HDFS"
+def run_pipeline(dataset_name: str = "Apache", num_lines: int = 1000):
+    print(f"\n{'='*60}")
+    print(f" LOGMARK PIPELINE TUTORIAL: {dataset_name} Dataset")
+    print(f"{'='*60}\n")
+
+    # Load Dataset
+    print(f"[1/5] Initializing Loghub Dataset: {dataset_name}")
     dataset = LoghubDataset(dataset_name)
-    dataset.download()
-    log_path = dataset.get_log_path()
+    
+    # Download the dataset if it's not already cached locally
+    print(f"Downloading/Extracting dataset (if needed)...")
+    dataset.download(debug=False)
+    print(f"Dataset is ready!")
 
-    drain = get_parser("drain", sim_th=0.5, depth=4)
-
-    print("\n[1/3] Parsing logs with Drain...")
+    # Parsing Logs
+    print("\n[2/5] Parsing raw logs using Drain Parser...")
+    # Initialize Drain parser
+    parser = get_parser("drain", sim_th=0.5, depth=4)
+    
     parsed_data = []
     vocab_map = {}
-    current_vocab_id = 1
+    current_vocab_id = 1  # 0 is reserved for padding
 
-    with open(log_path, "r") as f:
-        for i, line in enumerate(f):
-            if i >= 1000: break
+    # Iterate over the raw text log stream
+    for i, line in enumerate(dataset.get_log_iterator()):
+        if i >= num_lines:
+            break
+            
+        # Parse the raw line into a cluster ID
+        cluster_id = parser.get_cluster_id(line)
+        
+        # Map the string cluster ID to an integer
+        if cluster_id not in vocab_map:
+            vocab_map[cluster_id] = current_vocab_id
+            current_vocab_id += 1
 
-            cluster_id = drain.get_cluster_id(line.strip())
+        parsed_data.append({
+            "timestamp": i, # Mocking timestamp
+            "event_id": vocab_map[cluster_id],
+            "raw_cluster_id": cluster_id
+        })
 
-            if cluster_id not in vocab_map:
-                vocab_map[cluster_id] = current_vocab_id
-                current_vocab_id += 1
+    print(f"Successfully parsed {len(parsed_data)} lines.")
+    print(f"Discovered {len(vocab_map)} unique log templates (Event IDs).")
 
-            parsed_data.append({
-                "timestamp": i,
-                "event_id": vocab_map[cluster_id],
-                "raw_cluster_id": cluster_id
-            })
+    if not parsed_data:
+        print("No data parsed. Exiting.")
+        return
 
-    print(f"Parsed {len(parsed_data)} lines. Unique Event IDs found: {len(vocab_map)}")
-
-    print("\n[2/3] Applying Count-based Windowing via Polars...")
+    # Windowing
+    print("\n[3/5] Applying Windowing Logic using Polars...")
+    # Convert parsed dictionaries to Polars LazyFrame
     df_raw = pl.DataFrame(parsed_data).lazy()
 
+    # Count-based sliding window
     window_manager = LogWindowing(
         window_type=WindowType.COUNT,
         window_size=50,
@@ -49,28 +69,53 @@ def main():
     )
 
     df_windowed = window_manager.transform(df_raw).collect()
-    print(f"Generated {df_windowed.height} sliding windows.")
-    print(df_windowed.select(["event_id"]).head(2))
+    print(f"Generated {df_windowed.height} sequential sliding windows.")
+    print("Preview of the first window (event_ids):")
+    print(df_windowed.select(["event_id"]).head(1).item())
 
-    print("\n[3/3] Testing PyTorch Embedders...")
-    vocab_size = current_vocab_id + 1  # Include padding index 0
-
-    collator = WindowCollator()
+    # Data Collation for PyTorch
+    print("\n[4/5] Collating Polars Lists into PyTorch Tensors...")
+    collator = WindowCollator(padding_value=0)
     padded_input, mask = collator.collate(df_windowed, token_col="event_id")
+    
+    print(f"Input Tensor Shape: {padded_input.shape} (batch_size, max_seq_len)")
+    print(f"Mask Tensor Shape:  {mask.shape}")
 
-    print("\n--- Flow A: Pre-Window (Semantic Pooling) ---")
-    embedder_a = build_encoder("mean_pool", vocab_size=vocab_size, dim=64)
+    # Embedding
+    print("\n[5/5] Passing tensors through Deep Learning Embedders...")
+    vocab_size = current_vocab_id + 1  # Account for the 0 padding index
 
+    # Mean Pool
+    print("\n> Strategy A: Mean Pooling Embedder")
+    print("(Embeds each event to a dense vector, then averages across the window)")
+    
+    embed_dim = 32
+    embedder_a = build_encoder("mean_pool", vocab_size=vocab_size, dim=embed_dim)
+    
     tensor_a = embedder_a(padded_input, mask)
-    print(f"Flow A Output Shape: {tensor_a.shape}")
-    print(f"Sample vector (first 5 dims): {tensor_a[0, :5].detach().numpy()}")
+    print(f"Output Shape: {tensor_a.shape} -> [Num Windows, Embedding Dim]")
+    print(f"Sample features (first 5 dims): {tensor_a[0, :5].detach().numpy().round(4)}")
 
-    print("\n--- Flow B: Post-Window (Frequency Distribution) ---")
+    # Count Vector
+    print("\n> Strategy B: Count Vector Embedder")
+    print("(Creates a sparse frequency distribution over the vocabulary)")
+    
     embedder_b = build_encoder("count", vocab_size=vocab_size)
-
+    
     tensor_b = embedder_b(padded_input, mask)
-    print(f"Flow B Output Shape: {tensor_b.shape}")
-    print(f"Sample frequency counts (first 10 vocab IDs): {tensor_b[0, :10].detach().numpy()}")
+    print(f"Output Shape: {tensor_b.shape} -> [Num Windows, Vocab Size]")
+    print(f"Sample frequencies (first 10 vocab IDs): {tensor_b[0, :10].detach().numpy()}")
+    
+    print(f"\n{'='*60}")
+    print(" Pipeline Execution Complete!")
+    print(f"{'='*60}\n")
+
 
 if __name__ == "__main__":
-    main()
+    # You can change the dataset here
+    dataset_to_run = "Apache"
+    
+    if len(sys.argv) > 1:
+        dataset_to_run = sys.argv[1]
+        
+    run_pipeline(dataset_name=dataset_to_run, num_lines=1000)
