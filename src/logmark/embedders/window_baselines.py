@@ -11,9 +11,7 @@ from .utils import clamp_oov
 
 @register_encoder("count")
 class CountVectorEncoder(WindowEmbedder):
-    """
-    Bag-of-words: each window becomes a vector of how many times each event id occurred
-    """
+    # Bag-of-words
     def __init__(self, vocab_size: int, normalize: Literal["none", "l1"] = "none"):
         super().__init__()
         self.vocab_size = vocab_size
@@ -94,7 +92,7 @@ class MeanPoolingEncoder(PoolingEmbeddingEncoder):
 
 @register_encoder("attention_pool")
 class AttentionPoolingEncoder(WindowEmbedder):
-    """Mean pooling with learned per-token weights."""
+    """Mean pooling with learned per-token weights"""
     def __init__(self, vocab_size: int, dim: int):
         super().__init__()
         self.vocab_size = vocab_size
